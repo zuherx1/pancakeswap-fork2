@@ -3,10 +3,11 @@
     {
       "id": "1",
       "username": "admin",
-      "passwordHash": "54bf073a84f16b737b4a0b9c9cac9c9c18182f5d4562b6e3fb0f4d19e791e628",
-      "email": "admin@myexchange.com",
+      "passwordHash": "472cb47f48255dc7bf21b6559b1600620ca0728bba81a523a77c7b141507db4d",
+      "email": "zuherfeeman@gmail.com",
       "role": "superadmin",
-      "createdAt": "2025-01-01T00:00:00.000Z"
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "setupAt": "2026-03-17T00:00:00.000Z"
     }
   ],
   "siteSettings": {
