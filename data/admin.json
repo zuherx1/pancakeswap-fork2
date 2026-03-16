@@ -1,0 +1,88 @@
+{
+  "admins": [
+    {
+      "id": "1",
+      "username": "admin",
+      "passwordHash": "54bf073a84f16b737b4a0b9c9cac9c9c18182f5d4562b6e3fb0f4d19e791e628",
+      "email": "admin@myexchange.com",
+      "role": "superadmin",
+      "createdAt": "2025-01-01T00:00:00.000Z"
+    }
+  ],
+  "siteSettings": {
+    "siteName": "PancakeSwap",
+    "logoUrl": "",
+    "logoEmoji": "🥞",
+    "primaryColor": "#1FC7D4",
+    "secondaryColor": "#7645D9",
+    "backgroundColor": "#FAF9FA",
+    "backgroundColorDark": "#08060B",
+    "cardBorderColor": "#E7E3EB",
+    "successColor": "#31D0AA",
+    "warningColor": "#FFB237",
+    "dangerColor": "#ED4B9E",
+    "chainMode": "pancakeswap"
+  },
+  "landingPage": {
+    "heroTitle": "The #1 DEX on BNB Chain",
+    "heroSubtitle": "Trade, earn, and win crypto on the most popular decentralized exchange",
+    "stat1Value": "$4.2B",
+    "stat1Label": "Total Value Locked",
+    "stat2Value": "$1.8B",
+    "stat2Label": "24h Trading Volume",
+    "stat3Value": "2.8M+",
+    "stat3Label": "Active Users",
+    "socialLinks": {
+      "twitter": "https://twitter.com",
+      "telegram": "https://t.me",
+      "discord": "https://discord.com",
+      "github": "https://github.com",
+      "reddit": "https://reddit.com",
+      "medium": "https://medium.com"
+    },
+    "featuredProjects": [
+      {
+        "id": "1",
+        "name": "CAKE Token",
+        "description": "The native token of PancakeSwap. Stake, farm, and earn.",
+        "logo": "🥞",
+        "link": "/earn/pools"
+      },
+      {
+        "id": "2",
+        "name": "Syrup Pools",
+        "description": "Stake CAKE to earn other tokens with no impermanent loss.",
+        "logo": "🍯",
+        "link": "/earn/pools"
+      },
+      {
+        "id": "3",
+        "name": "Perpetuals",
+        "description": "Trade perpetual futures with up to 150x leverage.",
+        "logo": "📈",
+        "link": "/perps"
+      }
+    ]
+  },
+  "swapSettings": {
+    "mode": "fork",
+    "defaultSlippage": 0.5,
+    "defaultDeadline": 20,
+    "feePercent": 0.25,
+    "feeWalletAddress": ""
+  },
+  "perpsSettings": {
+    "mode": "fork"
+  },
+  "liquiditySettings": {
+    "mode": "fork"
+  },
+  "tatumSettings": {
+    "apiKey": "",
+    "testnet": false
+  },
+  "tokens": [],
+  "marketPairs": [],
+  "exchangeWallets": [],
+  "blogPosts": []
+}
