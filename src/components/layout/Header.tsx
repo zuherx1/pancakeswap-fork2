@@ -34,6 +34,7 @@ const NAV_ITEMS = [
     { label:'Burn',   href:'/board/burn',   icon:'🔥' },
     { label:'Voting', href:'/board/voting', icon:'🗳️' },
     { label:'Blog',   href:'/board/blog',   icon:'📝' },
+    { label:'Docs',   href:'/docs',          icon:'📚' },
   ]},
 ];
 
