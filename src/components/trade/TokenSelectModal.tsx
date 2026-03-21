@@ -116,27 +116,39 @@ const CHAIN_LIST = [
 
 interface Props {
   selectedToken?:  Token;
-  onSelectToken:   (token: Token) => void;
+  /* new prop name */
+  onSelectToken?:  (token: Token) => void;
+  /* old prop name — kept for backward compatibility */
+  onSelect?:       (token: Token) => void;
   onDismiss:       () => void;
+  /* new prop name */
   disabledToken?:  Token;
+  /* old prop name — kept for backward compatibility */
+  otherToken?:     Token;
   title?:          string;
 }
 
 export default function TokenSelectModal({
   selectedToken,
   onSelectToken,
+  onSelect,
   onDismiss,
   disabledToken,
+  otherToken,
   title = 'Select a Token',
 }: Props) {
   const { settings }   = useSettings();
   const [search,  setSearch]  = useState('');
-  const [chainId, setChainId] = useState(settings.activeChainId || 56);
+  const [chainId, setChainId] = useState(settings?.activeChainId || 56);
+
+  // Accept either prop name
+  const handleSelect = onSelectToken || onSelect || (() => {});
+  const blocked      = disabledToken || otherToken;
 
   // Sync chain with wallet chain
   useEffect(() => {
-    setChainId(settings.activeChainId || 56);
-  }, [settings.activeChainId]);
+    if (settings?.activeChainId) setChainId(settings.activeChainId);
+  }, [settings?.activeChainId]);
 
   const allTokens  = TOKENS_BY_CHAIN[chainId] || BSC_TOKENS;
   const commonSyms = COMMON[chainId] || COMMON[56];
@@ -154,20 +166,20 @@ export default function TokenSelectModal({
   const commonTokens = allTokens.filter(t => commonSyms.includes(t.symbol));
   const listTokens   = search ? filtered : filtered.filter(t => !commonSyms.includes(t.symbol));
 
-  const handleSelect = (token: Token) => {
-    if (disabledToken?.symbol === token.symbol && disabledToken?.chainId === token.chainId) return;
-    onSelectToken(token);
+  const handleToken = (token: Token) => {
+    if (blocked?.symbol === token.symbol) return;
+    handleSelect(token);
     onDismiss();
   };
 
   const renderToken = (token: Token) => {
-    const isDisabled = disabledToken?.symbol === token.symbol && disabledToken?.chainId === token.chainId;
-    const isSelected = selectedToken?.symbol === token.symbol && selectedToken?.chainId === token.chainId;
+    const isDisabled = blocked?.symbol === token.symbol;
+    const isSelected = selectedToken?.symbol === token.symbol;
     return (
       <TokenRow
         key={token.address + token.symbol}
         $disabled={isDisabled}
-        onClick={() => handleSelect(token)}
+        onClick={() => handleToken(token)}
         style={{ background: isSelected ? 'rgba(31,199,212,0.08)' : undefined }}
       >
         <LogoWrap>
@@ -229,7 +241,7 @@ export default function TokenSelectModal({
               <CommonBtn
                 key={token.symbol}
                 $active={selectedToken?.symbol === token.symbol}
-                onClick={() => handleSelect(token)}
+                onClick={() => handleToken(token)}
               >
                 {token.logoURI ? (
                   <img src={token.logoURI} width={18} height={18} style={{ borderRadius: '50%' }} alt={token.symbol} />
