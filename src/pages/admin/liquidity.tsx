@@ -1,252 +1,518 @@
 import React, { useState, useEffect } from 'react';
-import AdminLayout from '../../components/admin/AdminLayout';
-import {
-  Section, SectionTitle, SectionDesc,
-  FormRow, FormGrid, Label, Hint,
-  Input, Select, SaveBtn, SecondaryBtn,
-  DangerBtn, Badge, PageDesc,
-  Toggle, ToggleRow, ToggleInfo, ToggleLabel, ToggleDesc,
-  useAdminToast,
-} from '../../components/admin/AdminUI';
-import { useAdmin, adminFetch } from '../../context/AdminContext';
-import { TATUM_CHAINS } from '../../utils/tatum';
+import styled from 'styled-components';
+import { Button } from '../../components/ui/Button';
+import { Text, Heading } from '../../components/ui/Typography';
+import TokenSelectModal from '../../components/trade/TokenSelectModal';
+import { Token, getTokensByChain } from '../../constants/tokens';
+import { useWeb3 } from '../../context/Web3Context';
+import { useSettings } from '../../context/SettingsContext';
 
-interface ExchangeWallet {
-  id: string; chain: string; address: string; balance: string;
-  tokenId: string | null; createdAt: string;
-  liquidityHistory: { type: string; amount: string; note: string; timestamp: string }[];
-}
+/* ─── Styled ─────────────────────────────────────────────────────────────── */
+const Page = styled.div`
+  min-height: calc(100vh - 56px);
+  background: ${({ theme }) => theme.colors.background};
+`;
 
-interface Token { id: string; name: string; symbol: string; logoEmoji: string; chain: string; }
+const Inner = styled.div`
+  max-width: 560px; margin: 0 auto;
+  padding: 32px 16px 64px;
+`;
 
+const Card = styled.div`
+  background: ${({ theme }) => theme.colors.backgroundAlt};
+  border: 1px solid ${({ theme }) => theme.colors.cardBorder};
+  border-radius: 24px; overflow: hidden;
+`;
+
+const CardHeader = styled.div`
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px; border-bottom: 1px solid ${({ theme }) => theme.colors.cardBorder};
+`;
+
+const CardBody = styled.div`padding: 20px 24px 24px;`;
+
+const TabRow = styled.div`
+  display: flex; gap: 4px;
+  background: ${({ theme }) => theme.colors.input};
+  border-radius: 14px; padding: 4px; margin-bottom: 20px;
+`;
+
+const Tab = styled.button<{ $on?: boolean }>`
+  flex: 1; padding: 9px; border-radius: 10px;
+  font-size: 15px; font-weight: 700; font-family: 'Kanit', sans-serif;
+  cursor: pointer; border: none; transition: all .15s;
+  background: ${({ $on, theme }) => $on ? theme.colors.backgroundAlt : 'transparent'};
+  color: ${({ $on, theme }) => $on ? theme.colors.text : theme.colors.textSubtle};
+  box-shadow: ${({ $on }) => $on ? '0 1px 4px rgba(0,0,0,.1)' : 'none'};
+`;
+
+const TokenPanel = styled.div`
+  background: ${({ theme }) => theme.colors.input};
+  border: 1px solid ${({ theme }) => theme.colors.cardBorder};
+  border-radius: 18px; padding: 14px 16px; margin-bottom: 8px;
+  &:focus-within { border-color: ${({ theme }) => theme.colors.primary}; }
+`;
+
+const PanelRow = styled.div`display: flex; align-items: center; gap: 10px;`;
+
+const AmtInput = styled.input`
+  flex: 1; background: transparent; border: none; outline: none;
+  font-size: 22px; font-weight: 700; color: ${({ theme }) => theme.colors.text};
+  font-family: 'Kanit', sans-serif; min-width: 0;
+  &::placeholder { color: ${({ theme }) => theme.colors.textDisabled}; }
+`;
+
+const TokenSelectBtn = styled.button`
+  display: flex; align-items: center; gap: 7px;
+  padding: 8px 12px; border-radius: 14px; flex-shrink: 0;
+  background: ${({ theme }) => theme.colors.backgroundAlt};
+  border: 1px solid ${({ theme }) => theme.colors.cardBorder};
+  color: ${({ theme }) => theme.colors.text};
+  font-size: 15px; font-weight: 700; font-family: 'Kanit', sans-serif;
+  cursor: pointer; transition: all .15s;
+  &:hover { border-color: ${({ theme }) => theme.colors.primary}; }
+`;
+
+const PlusIcon = styled.div`
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%; margin: 4px auto;
+  background: ${({ theme }) => theme.colors.input};
+  border: 1px solid ${({ theme }) => theme.colors.cardBorder};
+  color: ${({ theme }) => theme.colors.textSubtle}; font-size: 18px;
+`;
+
+const InfoRow = styled.div`
+  display: flex; justify-content: space-between; padding: 7px 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.cardBorder + '50'};
+  &:last-child { border-bottom: none; }
+`;
+
+const InfoBox = styled.div`
+  background: ${({ theme }) => theme.colors.input};
+  border-radius: 14px; padding: 14px 16px; margin-bottom: 16px;
+`;
+
+const PositionCard = styled.div`
+  background: ${({ theme }) => theme.colors.backgroundAlt};
+  border: 1px solid ${({ theme }) => theme.colors.cardBorder};
+  border-radius: 16px; overflow: hidden; margin-bottom: 12px;
+`;
+
+const PositionHeader = styled.div`
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; cursor: pointer;
+  &:hover { background: ${({ theme }) => theme.colors.input}; }
+`;
+
+const PositionBody = styled.div<{ $open: boolean }>`
+  max-height: ${({ $open }) => $open ? '400px' : '0'};
+  overflow: hidden; transition: max-height .3s ease;
+  padding: ${({ $open }) => $open ? '0 18px 16px' : '0 18px'};
+`;
+
+const PercentBar = styled.div`
+  display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;
+`;
+
+const PctBtn = styled.button<{ $on?: boolean }>`
+  padding: 6px 14px; border-radius: 10px; font-size: 14px; font-weight: 700;
+  font-family: 'Kanit', sans-serif; cursor: pointer;
+  border: 1px solid ${({ $on, theme }) => $on ? theme.colors.primary : theme.colors.cardBorder};
+  background: ${({ $on, theme }) => $on ? theme.colors.primary + '15' : 'transparent'};
+  color: ${({ $on, theme }) => $on ? theme.colors.primary : theme.colors.textSubtle};
+  transition: all .15s;
+`;
+
+const BigPercent = styled.div`
+  font-size: 60px; font-weight: 700; text-align: center;
+  color: ${({ theme }) => theme.colors.text}; font-family: 'Kanit', sans-serif;
+  margin-bottom: 8px;
+`;
+
+const Slider = styled.input`
+  width: 100%; margin-bottom: 16px; cursor: pointer; accent-color: ${({ theme }) => theme.colors.primary};
+`;
+
+const TokenImg = styled.img`
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid ${({ theme }) => theme.colors.cardBorder};
+`;
+
+const FallbackIcon = styled.div`
+  width: 26px; height: 26px; border-radius: 50%;
+  background: ${({ theme }) => theme.colors.primary + '20'};
+  border: 1px solid ${({ theme }) => theme.colors.cardBorder};
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: ${({ theme }) => theme.colors.primary};
+`;
+
+/* ─── Mock LP positions ──────────────────────────────────────────────────── */
+const MOCK_POSITIONS = [
+  { id:'1', token0:'BNB',  token1:'CAKE', token0Amount:'1.24',  token1Amount:'348.2',  share:'0.0142%', usdValue:'$1,284', lpAmount:'0.00342' },
+  { id:'2', token0:'ETH',  token1:'USDT', token0Amount:'0.412', token1Amount:'1,324',  share:'0.0033%', usdValue:'$2,648', lpAmount:'0.000892' },
+];
+
+/* ─── Component ─────────────────────────────────────────────────────────── */
 export default function LiquidityPage() {
-  const { token } = useAdmin();
-  const { showToast, ToastComponent } = useAdminToast();
+  const { account, connect, isConnected } = useWeb3();
+  const { settings } = useSettings();
+  const chainId      = settings.activeChainId || 56;
 
-  const [wallets,       setWallets]      = useState<ExchangeWallet[]>([]);
-  const [tokens,        setTokens]       = useState<Token[]>([]);
-  const [liquidityMode, setLiquidityMode]= useState('fork');
-  const [loading,       setLoading]      = useState(true);
-  const [selWallet,     setSelWallet]    = useState('');
-  const [addAmt,        setAddAmt]       = useState('');
-  const [addNote,       setAddNote]      = useState('');
-  const [adding,        setAdding]       = useState(false);
-  const [balLoading,    setBalLoading]   = useState<string | null>(null);
-  const [savingMode,    setSavingMode]   = useState(false);
+  const [tab,        setTab]        = useState<'add' | 'remove'>('add');
+  const [token0,     setToken0]     = useState<Token | null>(null);
+  const [token1,     setToken1]     = useState<Token | null>(null);
+  const [amount0,    setAmount0]    = useState('');
+  const [amount1,    setAmount1]    = useState('');
+  const [modal,      setModal]      = useState<'token0' | 'token1' | null>(null);
+  const [loading,    setLoading]    = useState(false);
+  const [success,    setSuccess]    = useState(false);
+  const [positions,  setPositions]  = useState(MOCK_POSITIONS);
+  const [expanded,   setExpanded]   = useState<string | null>(null);
+  const [removePct,  setRemovePct]  = useState(50);
+  const [removing,   setRemoving]   = useState<string | null>(null);
 
-  const load = async () => {
+  // Preset common pairs
+  useEffect(() => {
+    const tokens = getTokensByChain(chainId);
+    const t0 = tokens.find(t => t.symbol === 'BNB' || t.symbol === 'ETH');
+    const t1 = tokens.find(t => t.symbol === 'USDT');
+    if (t0) setToken0(t0);
+    if (t1) setToken1(t1);
+  }, [chainId]);
+
+  // Simulate paired amount calculation (1 BNB ≈ 340 USDT price ratio)
+  const handleAmount0Change = (val: string) => {
+    if (!/^\d*\.?\d*$/.test(val)) return;
+    setAmount0(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && token0 && token1) {
+      const ratio = token0.symbol === 'BNB' ? 340 : token0.symbol === 'ETH' ? 2800 : 1;
+      setAmount1((num * ratio).toFixed(4));
+    }
+  };
+
+  const handleAmount1Change = (val: string) => {
+    if (!/^\d*\.?\d*$/.test(val)) return;
+    setAmount1(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && token0 && token1) {
+      const ratio = token0.symbol === 'BNB' ? 340 : token0.symbol === 'ETH' ? 2800 : 1;
+      setAmount0((num / ratio).toFixed(6));
+    }
+  };
+
+  const handleAddLiquidity = async () => {
+    if (!token0 || !token1 || !amount0 || !amount1) return;
     setLoading(true);
-    try {
-      const [wr, tr, lr] = await Promise.all([
-        token ? adminFetch('/api/tatum?action=wallets', token).then(r => r.ok ? r.json() : []) : [],
-        fetch('/api/tokens').then(r => r.ok ? r.json() : []),
-        fetch('/api/admin/data?section=liquiditySettings').then(r => r.json()),
-      ]);
-      if (Array.isArray(wr)) setWallets(wr);
-      if (Array.isArray(tr)) setTokens(tr);
-      if (lr?.mode) setLiquidityMode(lr.mode);
-    } catch {} finally { setLoading(false); }
+    await new Promise(r => setTimeout(r, 1800));
+    // Add mock position
+    const newPos = {
+      id:          Date.now().toString(),
+      token0:      token0.symbol,
+      token1:      token1.symbol,
+      token0Amount: amount0,
+      token1Amount: amount1,
+      share:       '0.0001%',
+      usdValue:    `$${(parseFloat(amount0) * 340).toFixed(0)}`,
+      lpAmount:    (parseFloat(amount0) * 0.001).toFixed(6),
+    };
+    setPositions(prev => [newPos, ...prev]);
+    setLoading(false);
+    setSuccess(true);
+    setTimeout(() => { setSuccess(false); setAmount0(''); setAmount1(''); setTab('remove'); }, 2500);
   };
 
-  useEffect(() => { load(); }, [token]);
-
-  const handleSaveMode = async () => {
-    if (!token) return;
-    setSavingMode(true);
-    try {
-      const res = await adminFetch('/api/admin/data', token, {
-        method: 'POST',
-        body: JSON.stringify({ section: 'liquiditySettings', payload: { mode: liquidityMode } }),
-      });
-      if (res.ok) showToast('Liquidity mode saved!');
-      else showToast('Failed to save', 'error');
-    } catch { showToast('Network error', 'error'); }
-    finally { setSavingMode(false); }
+  const handleRemoveLiquidity = async (posId: string) => {
+    setRemoving(posId);
+    await new Promise(r => setTimeout(r, 1500));
+    setPositions(prev => prev.filter(p => p.id !== posId));
+    setRemoving(null);
+    setExpanded(null);
   };
 
-  const getLabel = (w: ExchangeWallet) => {
-    const chain = TATUM_CHAINS[w.chain];
-    const tok   = w.tokenId ? tokens.find(t => t.id === w.tokenId) : null;
-    return `${chain?.icon || '🔗'} ${tok ? `${tok.symbol} (${chain?.name || w.chain})` : `${chain?.symbol || w.chain} — ${chain?.name || w.chain}`}`;
+  const renderTokenIcon = (symbol: string, logoURI?: string) => {
+    if (logoURI) return <TokenImg src={logoURI} alt={symbol} onError={e => { (e.target as HTMLImageElement).style.display='none'; }} />;
+    return <FallbackIcon>{symbol.slice(0,2)}</FallbackIcon>;
   };
 
-  const selected = wallets.find(w => w.id === selWallet);
+  const pool0 = token0 ? getTokensByChain(chainId).find(t => t.symbol === token0.symbol) : null;
+  const pool1 = token1 ? getTokensByChain(chainId).find(t => t.symbol === token1.symbol) : null;
 
-  const handleAdd = async () => {
-    if (!token || !selWallet || !addAmt) { showToast('Select wallet and enter amount', 'error'); return; }
-    setAdding(true);
-    try {
-      const res = await adminFetch('/api/tatum?action=add-liquidity', token, {
-        method: 'POST',
-        body: JSON.stringify({ walletId: selWallet, amount: addAmt, note: addNote }),
-      });
-      const data = await res.json();
-      if (res.ok) { showToast('Liquidity record added!'); setAddAmt(''); setAddNote(''); load(); }
-      else showToast(data.error || 'Failed', 'error');
-    } catch { showToast('Network error', 'error'); }
-    finally { setAdding(false); }
-  };
-
-  const refreshBal = async (wid: string) => {
-    if (!token) return;
-    setBalLoading(wid);
-    try {
-      const res = await adminFetch(`/api/tatum?action=balance&walletId=${wid}`, token);
-      const data = await res.json();
-      if (res.ok) {
-        setWallets(ws => ws.map(w => w.id === wid ? { ...w, balance: data.balance } : w));
-        showToast('Balance refreshed');
-      }
-    } catch {} finally { setBalLoading(null); }
-  };
+  const canAdd = !!token0 && !!token1 && !!amount0 && !!amount1 && isConnected;
 
   return (
-    <AdminLayout title="Liquidity Management">
-      <PageDesc>Manage liquidity for exchange wallets and configure staking/liquidity mode.</PageDesc>
-
-      {/* Liquidity Mode */}
-      <Section>
-        <SectionTitle>⚙️ Liquidity &amp; Staking Mode</SectionTitle>
-        <SectionDesc>Choose how staking and liquidity farming works on your exchange.</SectionDesc>
-
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-          {[
-            { id: 'fork',   icon: '🍴', label: 'Fork Mode',   desc: 'Uses pre-built PancakeSwap farms and pools. Works immediately with simulated data.' },
-            { id: 'native', icon: '⚡', label: 'Native Mode',  desc: 'Funds go to your exchange wallets. Real on-chain staking via Tatum.io.' },
-          ].map(opt => (
-            <div
-              key={opt.id}
-              onClick={() => setLiquidityMode(opt.id)}
-              style={{
-                flex: 1, minWidth: 200, padding: '18px 20px', borderRadius: 16,
-                cursor: 'pointer', transition: 'all 0.2s',
-                border: `2px solid ${liquidityMode === opt.id ? '#1FC7D4' : 'rgba(255,255,255,0.08)'}`,
-                background: liquidityMode === opt.id ? 'rgba(31,199,212,0.1)' : 'rgba(255,255,255,0.03)',
-              }}
-            >
-              <div style={{ fontSize: 26, marginBottom: 8 }}>{opt.icon}</div>
-              <div style={{ fontWeight: 700, color: 'white', fontFamily: 'Kanit,sans-serif', marginBottom: 6 }}>
-                {opt.label}
-                {liquidityMode === opt.id && <span style={{ marginLeft: 8, fontSize: 11, padding: '2px 7px', borderRadius: 20, background: 'rgba(31,199,212,0.2)', color: '#1FC7D4' }}>Active</span>}
-              </div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>{opt.desc}</div>
-            </div>
-          ))}
+    <Page>
+      <Inner>
+        <div style={{ textAlign:'center', marginBottom:28 }}>
+          <Heading scale="xl" style={{ marginBottom:6 }}>💧 Liquidity</Heading>
+          <Text color="textSubtle">Add liquidity to earn 0.17% of all trades on this pair, proportional to your share of the pool.</Text>
         </div>
-        <SaveBtn $loading={savingMode} onClick={handleSaveMode}>
-          {savingMode ? 'Saving…' : '💾 Save Mode'}
-        </SaveBtn>
-      </Section>
 
-      {/* How it works */}
-      <Section>
-        <SectionTitle>💡 How Liquidity Works</SectionTitle>
-        {[
-          { n:'1', t:'Generate wallets', d:'Create exchange wallets in Tatum.io section for each token.' },
-          { n:'2', t:'Fund the wallets',  d:'Send crypto to wallet addresses. Record amounts here.' },
-          { n:'3', t:'Users swap',        d:'Token A goes to exchange wallet A, Token B leaves exchange wallet B.' },
-          { n:'4', t:'Perps payout',      d:'When users win perps, winnings are automatically sent from your exchange wallet to their address.' },
-        ].map(s => (
-          <div key={s.n} style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-            <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: 'linear-gradient(135deg,#1FC7D4,#7645D9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'white' }}>{s.n}</div>
-            <div>
-              <div style={{ fontWeight: 700, color: 'white', fontFamily: 'Kanit,sans-serif', marginBottom: 2 }}>{s.t}</div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.5 }}>{s.d}</div>
-            </div>
-          </div>
-        ))}
-      </Section>
+        <Card>
+          <CardHeader>
+            <Text bold style={{ fontSize:18 }}>
+              {tab === 'add' ? 'Add Liquidity' : 'Your Positions'}
+            </Text>
+            <TabRow style={{ margin:0, background:'transparent', padding:0 }}>
+              <Tab $on={tab==='add'}    onClick={() => setTab('add')}    style={{ padding:'6px 16px', fontSize:13 }}>Add</Tab>
+              <Tab $on={tab==='remove'} onClick={() => setTab('remove')} style={{ padding:'6px 16px', fontSize:13 }}>
+                Remove
+                {positions.length > 0 && (
+                  <span style={{
+                    marginLeft:6, fontSize:11, background:'rgba(31,199,212,0.2)',
+                    color:'#1FC7D4', padding:'1px 6px', borderRadius:20,
+                  }}>{positions.length}</span>
+                )}
+              </Tab>
+            </TabRow>
+          </CardHeader>
 
-      {/* Add liquidity */}
-      <Section>
-        <SectionTitle>➕ Add Liquidity Record</SectionTitle>
-        {wallets.length === 0 ? (
-          <div style={{ padding: '14px', borderRadius: 12, background: 'rgba(255,178,55,0.1)', border: '1px solid rgba(255,178,55,0.3)', color: '#FFB237', fontSize: 14 }}>
-            ⚠️ No exchange wallets. <a href="/admin/tatum" style={{ color: '#1FC7D4', fontWeight: 700 }}>Generate wallets in Tatum.io →</a>
-          </div>
-        ) : (
-          <>
-            <FormRow>
-              <Label>Select Wallet</Label>
-              <Select value={selWallet} onChange={e => setSelWallet(e.target.value)}>
-                <option value="">Choose wallet…</option>
-                {wallets.map(w => <option key={w.id} value={w.id}>{getLabel(w)} — Bal: {w.balance || '0'}</option>)}
-              </Select>
-            </FormRow>
+          <CardBody>
+            {/* ── Add Liquidity ── */}
+            {tab === 'add' && (
+              <>
+                {success && (
+                  <div style={{
+                    padding:'14px', borderRadius:14, marginBottom:16, textAlign:'center',
+                    background:'rgba(49,208,170,0.12)', border:'1px solid rgba(49,208,170,0.3)',
+                    color:'#31D0AA', fontWeight:700, fontFamily:'Kanit,sans-serif',
+                  }}>
+                    ✅ Liquidity added successfully! LP tokens sent to your wallet.
+                  </div>
+                )}
 
-            {selected && (
-              <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 12, background: 'rgba(31,199,212,0.08)', border: '1px solid rgba(31,199,212,0.2)', fontSize: 13 }}>
-                <div style={{ color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>Send funds to:</div>
-                <div style={{ fontFamily: 'monospace', color: '#1FC7D4', cursor: 'pointer', wordBreak: 'break-all' }}
-                  onClick={() => { navigator.clipboard.writeText(selected.address); showToast('Copied!'); }}>
-                  {selected.address} 📋
-                </div>
-                <div style={{ marginTop: 6 }}>Balance: <strong style={{ color: '#31D0AA' }}>{selected.balance || '0'} {TATUM_CHAINS[selected.chain]?.symbol}</strong></div>
-              </div>
+                {/* Token 0 */}
+                <TokenPanel>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
+                    <Text small color="textSubtle">Input</Text>
+                    {account && <Text small color="textSubtle">Balance: 1.248</Text>}
+                  </div>
+                  <PanelRow>
+                    <AmtInput
+                      placeholder="0.0"
+                      value={amount0}
+                      onChange={e => handleAmount0Change(e.target.value)}
+                    />
+                    <TokenSelectBtn onClick={() => setModal('token0')}>
+                      {token0 ? (
+                        <>
+                          {pool0?.logoURI && <img src={pool0.logoURI} width={20} height={20} style={{ borderRadius:'50%' }} alt="" />}
+                          {token0.symbol}
+                        </>
+                      ) : 'Select token'}
+                      <span style={{ fontSize:10 }}>▼</span>
+                    </TokenSelectBtn>
+                  </PanelRow>
+                </TokenPanel>
+
+                <PlusIcon>＋</PlusIcon>
+
+                {/* Token 1 */}
+                <TokenPanel>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
+                    <Text small color="textSubtle">Input</Text>
+                    {account && <Text small color="textSubtle">Balance: 2,840</Text>}
+                  </div>
+                  <PanelRow>
+                    <AmtInput
+                      placeholder="0.0"
+                      value={amount1}
+                      onChange={e => handleAmount1Change(e.target.value)}
+                    />
+                    <TokenSelectBtn onClick={() => setModal('token1')}>
+                      {token1 ? (
+                        <>
+                          {pool1?.logoURI && <img src={pool1.logoURI} width={20} height={20} style={{ borderRadius:'50%' }} alt="" />}
+                          {token1.symbol}
+                        </>
+                      ) : 'Select token'}
+                      <span style={{ fontSize:10 }}>▼</span>
+                    </TokenSelectBtn>
+                  </PanelRow>
+                </TokenPanel>
+
+                {/* Prices & pool share */}
+                {token0 && token1 && amount0 && (
+                  <InfoBox style={{ marginTop:12 }}>
+                    <Text small color="textSubtle" style={{ fontWeight:700, marginBottom:8 }}>
+                      Prices &amp; Pool Share
+                    </Text>
+                    <InfoRow>
+                      <Text small color="textSubtle">{token1?.symbol} per {token0?.symbol}</Text>
+                      <Text small bold>340.24</Text>
+                    </InfoRow>
+                    <InfoRow>
+                      <Text small color="textSubtle">{token0?.symbol} per {token1?.symbol}</Text>
+                      <Text small bold>0.00294</Text>
+                    </InfoRow>
+                    <InfoRow>
+                      <Text small color="textSubtle">Share of pool</Text>
+                      <Text small bold>&lt; 0.01%</Text>
+                    </InfoRow>
+                  </InfoBox>
+                )}
+
+                {!isConnected ? (
+                  <Button fullWidth scale="lg" onClick={connect}>🔓 Connect Wallet</Button>
+                ) : (
+                  <Button
+                    fullWidth scale="lg"
+                    disabled={!canAdd || loading}
+                    isLoading={loading}
+                    onClick={handleAddLiquidity}
+                  >
+                    {loading ? 'Adding Liquidity…' :
+                     !token0 || !token1 ? 'Select tokens' :
+                     !amount0 ? 'Enter an amount' :
+                     'Supply Liquidity'}
+                  </Button>
+                )}
+
+                <Text small color="textSubtle" style={{ textAlign:'center', marginTop:10, fontSize:11 }}>
+                  By adding liquidity you'll earn 0.17% of all trades on this pair proportional to your share. Fees are added to the pool, accrue in real time and can be claimed by withdrawing your liquidity.
+                </Text>
+              </>
             )}
 
-            <FormGrid cols={2}>
-              <FormRow>
-                <Label>Amount Added</Label>
-                <Input type="number" placeholder="100.0" value={addAmt} onChange={e => setAddAmt(e.target.value)} />
-              </FormRow>
-              <FormRow>
-                <Label>Note</Label>
-                <Input placeholder="Initial liquidity…" value={addNote} onChange={e => setAddNote(e.target.value)} />
-              </FormRow>
-            </FormGrid>
-            <SaveBtn $loading={adding} onClick={handleAdd}>{adding ? 'Recording…' : '💧 Add Liquidity Record'}</SaveBtn>
-          </>
-        )}
-      </Section>
+            {/* ── Remove / Positions ── */}
+            {tab === 'remove' && (
+              <>
+                {positions.length === 0 && (
+                  <div style={{ textAlign:'center', padding:'32px 0' }}>
+                    <div style={{ fontSize:48, marginBottom:12 }}>💧</div>
+                    <Text bold style={{ marginBottom:8 }}>No liquidity found</Text>
+                    <Text small color="textSubtle" style={{ marginBottom:20 }}>
+                      You haven't added any liquidity yet.
+                    </Text>
+                    <Button scale="md" onClick={() => setTab('add')}>+ Add Liquidity</Button>
+                  </div>
+                )}
 
-      {/* Wallets overview */}
-      <Section>
-        <SectionTitle>👛 Exchange Wallets <Badge $color="#1FC7D4">{wallets.length}</Badge></SectionTitle>
-        {loading && <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.4)' }}>Loading…</div>}
-        {!loading && wallets.length === 0 && <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.3)' }}>No wallets yet.</div>}
-        {wallets.map(w => {
-          const chainInfo = TATUM_CHAINS[w.chain];
-          const tok = w.tokenId ? tokens.find(t => t.id === w.tokenId) : null;
-          const hasBal = parseFloat(w.balance || '0') > 0;
-          return (
-            <div key={w.id} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${hasBal ? 'rgba(49,208,170,0.2)' : 'rgba(255,255,255,0.08)'}`, borderRadius: 14, padding: '14px 16px', marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 22 }}>{chainInfo?.icon || '🔗'}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-                    <span style={{ fontWeight: 700, color: 'white', fontFamily: 'Kanit,sans-serif' }}>{tok ? `${tok.symbol}` : chainInfo?.symbol} Wallet</span>
-                    <Badge $color="#7645D9">{w.chain}</Badge>
-                    <Badge $color={hasBal ? '#31D0AA' : '#ED4B9E'}>{hasBal ? '✓ Funded' : '⚠ Empty'}</Badge>
-                  </div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: hasBal ? '#31D0AA' : 'rgba(255,255,255,0.3)', fontFamily: 'Kanit,sans-serif', marginBottom: 6 }}>
-                    {w.balance || '0'} {chainInfo?.symbol}
-                  </div>
-                  <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'rgba(31,199,212,0.6)', cursor: 'pointer' }}
-                    onClick={() => { navigator.clipboard.writeText(w.address); showToast('Copied!'); }}>
-                    {w.address.slice(0,20)}…{w.address.slice(-6)} 📋
-                  </div>
-                  {w.liquidityHistory?.length > 0 && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
-                      {w.liquidityHistory.length} liquidity record{w.liquidityHistory.length > 1 ? 's' : ''}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexDirection: 'column' }}>
-                  <SecondaryBtn onClick={() => refreshBal(w.id)} style={{ padding: '7px 12px', fontSize: 12 }}>
-                    {balLoading === w.id ? '⏳' : '🔄'} Balance
-                  </SecondaryBtn>
-                  <SecondaryBtn onClick={() => { setSelWallet(w.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ padding: '7px 12px', fontSize: 12 }}>
-                    💧 Add
-                  </SecondaryBtn>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </Section>
+                {positions.map(pos => (
+                  <PositionCard key={pos.id}>
+                    <PositionHeader onClick={() => setExpanded(expanded === pos.id ? null : pos.id)}>
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <div style={{ display:'flex', alignItems:'center' }}>
+                          <div style={{ marginRight:-8, zIndex:2 }}>
+                            {renderTokenIcon(pos.token0, getTokensByChain(chainId).find(t => t.symbol === pos.token0)?.logoURI)}
+                          </div>
+                          <div style={{ zIndex:1 }}>
+                            {renderTokenIcon(pos.token1, getTokensByChain(chainId).find(t => t.symbol === pos.token1)?.logoURI)}
+                          </div>
+                        </div>
+                        <div>
+                          <Text bold>{pos.token0}/{pos.token1}</Text>
+                          <Text small color="textSubtle">{pos.usdValue}</Text>
+                        </div>
+                      </div>
+                      <span style={{ fontSize:18, opacity:0.5 }}>{expanded === pos.id ? '▲' : '▼'}</span>
+                    </PositionHeader>
 
-      {ToastComponent}
-    </AdminLayout>
+                    <PositionBody $open={expanded === pos.id}>
+                      <div style={{ paddingTop:12 }}>
+                        <InfoBox>
+                          <InfoRow>
+                            <Text small color="textSubtle">Pooled {pos.token0}</Text>
+                            <Text small bold>{pos.token0Amount} {pos.token0}</Text>
+                          </InfoRow>
+                          <InfoRow>
+                            <Text small color="textSubtle">Pooled {pos.token1}</Text>
+                            <Text small bold>{pos.token1Amount} {pos.token1}</Text>
+                          </InfoRow>
+                          <InfoRow>
+                            <Text small color="textSubtle">Your pool share</Text>
+                            <Text small bold>{pos.share}</Text>
+                          </InfoRow>
+                          <InfoRow>
+                            <Text small color="textSubtle">LP Tokens</Text>
+                            <Text small bold>{pos.lpAmount}</Text>
+                          </InfoRow>
+                        </InfoBox>
+
+                        <Text small color="textSubtle" style={{ marginBottom:8 }}>Amount to remove</Text>
+                        <BigPercent>{removePct}%</BigPercent>
+                        <Slider
+                          type="range" min={1} max={100} value={removePct}
+                          onChange={e => setRemovePct(Number(e.target.value))}
+                        />
+                        <PercentBar>
+                          {[25,50,75,100].map(p => (
+                            <PctBtn key={p} $on={removePct === p} onClick={() => setRemovePct(p)}>
+                              {p === 100 ? 'Max' : `${p}%`}
+                            </PctBtn>
+                          ))}
+                        </PercentBar>
+
+                        <InfoBox style={{ marginBottom:12 }}>
+                          <InfoRow>
+                            <Text small color="textSubtle">You will receive {pos.token0}</Text>
+                            <Text small bold>{(parseFloat(pos.token0Amount) * removePct / 100).toFixed(6)}</Text>
+                          </InfoRow>
+                          <InfoRow>
+                            <Text small color="textSubtle">You will receive {pos.token1}</Text>
+                            <Text small bold>{(parseFloat(pos.token1Amount.replace(',','')) * removePct / 100).toFixed(4)}</Text>
+                          </InfoRow>
+                        </InfoBox>
+
+                        <div style={{ display:'flex', gap:10 }}>
+                          <Button
+                            fullWidth scale="md"
+                            variant="subtle"
+                            onClick={() => setExpanded(null)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            fullWidth scale="md"
+                            isLoading={removing === pos.id}
+                            onClick={() => handleRemoveLiquidity(pos.id)}
+                            style={{ background:'#ED4B9E', borderColor:'#ED4B9E' }}
+                          >
+                            {removing === pos.id ? 'Removing…' : 'Remove Liquidity'}
+                          </Button>
+                        </div>
+                      </div>
+                    </PositionBody>
+                  </PositionCard>
+                ))}
+
+                {positions.length > 0 && (
+                  <Button fullWidth variant="subtle" onClick={() => setTab('add')} style={{ marginTop:8 }}>
+                    + Add More Liquidity
+                  </Button>
+                )}
+              </>
+            )}
+          </CardBody>
+        </Card>
+
+        {/* Don't see your liquidity? */}
+        <div style={{ textAlign:'center', marginTop:20 }}>
+          <Text small color="textSubtle">
+            If you staked your LP tokens in a Farm, unstake them to see them here.
+          </Text>
+        </div>
+      </Inner>
+
+      {/* Token select modals */}
+      {modal === 'token0' && (
+        <TokenSelectModal
+          title="Select first token"
+          selectedToken={token0 || undefined}
+          disabledToken={token1 || undefined}
+          onSelectToken={t => { setToken0(t); setAmount0(''); setAmount1(''); }}
+          onDismiss={() => setModal(null)}
+        />
+      )}
+      {modal === 'token1' && (
+        <TokenSelectModal
+          title="Select second token"
+          selectedToken={token1 || undefined}
+          disabledToken={token0 || undefined}
+          onSelectToken={t => { setToken1(t); setAmount0(''); setAmount1(''); }}
+          onDismiss={() => setModal(null)}
+        />
+      )}
+    </Page>
   );
 }
