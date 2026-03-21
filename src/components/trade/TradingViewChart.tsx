@@ -1,97 +1,73 @@
-import React, { useEffect, useRef, memo } from 'react';
+import React, { useMemo, memo } from 'react';
 import styled from 'styled-components';
 import { useThemeContext } from '../../context/ThemeContext';
 
-const Wrapper = styled.div`
+const Wrapper = styled.div<{ $height: number }>`
   width: 100%;
-  height: 100%;
-  min-height: 480px;
-  background: ${({ theme }) => theme.colors.backgroundAlt};
+  height: ${({ $height }) => $height}px;
+  min-height: 300px;
   border-radius: 16px;
   overflow: hidden;
+  background: ${({ theme }) => theme.colors.backgroundAlt};
   position: relative;
 `;
 
-const LoadingOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 12px;
-  background: ${({ theme }) => theme.colors.backgroundAlt};
-  z-index: 1;
-`;
-
 interface Props {
-  symbol?: string;      // e.g. "BINANCE:BNBUSDT"
-  interval?: string;   // e.g. "15"
-  height?: number;
+  symbol?:   string;
+  interval?: string;
+  height?:   number;
 }
+
+let widgetCounter = 0;
 
 const TradingViewChart: React.FC<Props> = ({
   symbol   = 'BINANCE:BNBUSDT',
   interval = '15',
-  height   = 480,
+  height   = 500,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const scriptRef    = useRef<HTMLScriptElement | null>(null);
-  const { isDark }   = useThemeContext();
+  const { isDark } = useThemeContext();
+  // Stable ID per mount
+  const frameId = useMemo(() => `tv_adv_${++widgetCounter}`, []);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    // Clear previous widget
-    containerRef.current.innerHTML = '';
-
-    const container = document.createElement('div');
-    container.className = 'tradingview-widget-container__widget';
-    containerRef.current.appendChild(container);
-
-    const script = document.createElement('script');
-    script.type  = 'text/javascript';
-    script.src   = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.async = true;
-    script.innerHTML = JSON.stringify({
-      autosize:          true,
-      symbol,
-      interval,
-      timezone:          'Etc/UTC',
+  const src = useMemo(() => {
+    const base = 'https://www.tradingview.com/widgetembed/';
+    const p    = new URLSearchParams({
+      frameElementId:    frameId,
+      symbol:            symbol,
+      interval:          interval,
       theme:             isDark ? 'dark' : 'light',
       style:             '1',
       locale:            'en',
-      backgroundColor:   isDark ? '#1A1720' : '#FFFFFF',
-      gridColor:         isDark ? '#383241' : '#E7E3EB',
-      hide_top_toolbar:  false,
-      hide_legend:       false,
-      save_image:        false,
-      calendar:          false,
-      hide_volume:       false,
-      support_host:      'https://www.tradingview.com',
-      withdateranges:    true,
-      allow_symbol_change: true,
-      details:           true,
-      hotlist:           false,
-      news:              [],
-      studies:           ['MASimple@tv-basicstudies'],
-      container_id:      'tv_chart',
+      enable_publishing: '0',
+      allow_symbol_change: '1',
+      save_image:        '0',
+      hideideas:         '1',
+      hide_side_toolbar: '0',
+      withdateranges:    '1',
+      hide_legend:       '0',
+      calendar:          '0',
+      hotlist:           '0',
+      news:              '0',
+      details:           '0',
+      studies:           '[]',
+      overrides:         '{}',
+      studies_overrides: '{}',
+      toolbarbg:         isDark ? '1A1720' : 'f4f7f9',
+      utm_source:        typeof window !== 'undefined' ? window.location.hostname : '',
     });
-
-    containerRef.current.appendChild(script);
-    scriptRef.current = script;
-
-    return () => {
-      if (containerRef.current) containerRef.current.innerHTML = '';
-    };
-  }, [symbol, interval, isDark]);
+    return `${base}?${p.toString()}`;
+  }, [symbol, interval, isDark, frameId]);
 
   return (
-    <Wrapper style={{ height }}>
-      <div
-        ref={containerRef}
-        className="tradingview-widget-container"
-        style={{ height: '100%', width: '100%' }}
+    <Wrapper $height={height}>
+      <iframe
+        id={frameId}
+        src={src}
+        title={`TradingView Chart — ${symbol}`}
+        style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-top-navigation"
+        allow="autoplay; fullscreen"
+        loading="lazy"
       />
     </Wrapper>
   );
@@ -99,30 +75,57 @@ const TradingViewChart: React.FC<Props> = ({
 
 export default memo(TradingViewChart);
 
-/* ── Symbol map: convert our pair format to TradingView format ─────────── */
-export const PAIR_TO_TV_SYMBOL: Record<string, string> = {
-  'BNB/USDT':   'BINANCE:BNBUSDT',
-  'BTC/USDT':   'BINANCE:BTCUSDT',
-  'ETH/USDT':   'BINANCE:ETHUSDT',
-  'SOL/USDT':   'BINANCE:SOLUSDT',
-  'CAKE/USDT':  'BINANCE:CAKEUSDT',
-  'ADA/USDT':   'BINANCE:ADAUSDT',
-  'XRP/USDT':   'BINANCE:XRPUSDT',
-  'DOGE/USDT':  'BINANCE:DOGEUSDT',
-  'DOT/USDT':   'BINANCE:DOTUSDT',
-  'AVAX/USDT':  'BINANCE:AVAXUSDT',
-  'MATIC/USDT': 'BINANCE:MATICUSDT',
-  'LINK/USDT':  'BINANCE:LINKUSDT',
-  'LTC/USDT':   'BINANCE:LTCUSDT',
-  'BCH/USDT':   'BINANCE:BCHUSDT',
-  'UNI/USDT':   'BINANCE:UNIUSDT',
-  'ATOM/USDT':  'BINANCE:ATOMUSDT',
-  'NEAR/USDT':  'BINANCE:NEARUSDT',
-  'FTM/USDT':   'BINANCE:FTMUSDT',
-  'AAVE/USDT':  'BINANCE:AAVEUSDT',
+/* ── Symbol helpers ─────────────────────────────────────────────────────── */
+export const PAIR_TO_TV: Record<string, string> = {
+  // BNB Chain majors
+  'BNB/USDT': 'BINANCE:BNBUSDT',    'BNB/USDC': 'BINANCE:BNBUSDC',
+  'BTC/USDT': 'BINANCE:BTCUSDT',    'BTC/USDC': 'BINANCE:BTCUSDC',
+  'ETH/USDT': 'BINANCE:ETHUSDT',    'ETH/USDC': 'BINANCE:ETHUSDC',
+  'CAKE/USDT':'BINANCE:CAKEUSDT',   'CAKE/BNB': 'BINANCE:CAKEBNB',
+  'SOL/USDT': 'BINANCE:SOLUSDT',    'XRP/USDT': 'BINANCE:XRPUSDT',
+  'ADA/USDT': 'BINANCE:ADAUSDT',    'DOT/USDT': 'BINANCE:DOTUSDT',
+  'DOGE/USDT':'BINANCE:DOGEUSDT',   'MATIC/USDT':'BINANCE:MATICUSDT',
+  'AVAX/USDT':'BINANCE:AVAXUSDT',   'LINK/USDT':'BINANCE:LINKUSDT',
+  'UNI/USDT': 'BINANCE:UNIUSDT',    'ATOM/USDT':'BINANCE:ATOMUSDT',
+  'NEAR/USDT':'BINANCE:NEARUSDT',   'FTM/USDT': 'BINANCE:FTMUSDT',
+  'LTC/USDT': 'BINANCE:LTCUSDT',    'BCH/USDT': 'BINANCE:BCHUSDT',
+  'TRX/USDT': 'BINANCE:TRXUSDT',    'SHIB/USDT':'BINANCE:SHIBUSDT',
+  'AXS/USDT': 'BINANCE:AXSUSDT',    'SAND/USDT':'BINANCE:SANDUSDT',
+  'MANA/USDT':'BINANCE:MANAUSDT',   'GALA/USDT':'BINANCE:GALAUSDT',
+  'ARB/USDT': 'BINANCE:ARBUSDT',    'OP/USDT':  'BINANCE:OPUSDT',
+  'INJ/USDT': 'BINANCE:INJUSDT',    'SUI/USDT': 'BINANCE:SUIUSDT',
+  'APT/USDT': 'BINANCE:APTUSDT',    'PEPE/USDT':'BINANCE:PEPEUSDT',
+  'WIF/USDT': 'BINANCE:WIFUSDT',    'BONK/USDT':'BINANCE:BONKUSDT',
+  'FLOKI/USDT':'BINANCE:FLOKIUSDT', 'WLD/USDT': 'BINANCE:WLDUSDT',
+  'LDO/USDT': 'BINANCE:LDOUSDT',    'MKR/USDT': 'BINANCE:MKRUSDT',
+  'CRV/USDT': 'BINANCE:CRVUSDT',    'SNX/USDT': 'BINANCE:SNXUSDT',
+  'AAVE/USDT':'BINANCE:AAVEUSDT',   'COMP/USDT':'BINANCE:COMPUSDT',
+  'SUSHI/USDT':'BINANCE:SUSHIUSDT', '1INCH/USDT':'BINANCE:1INCHUSDT',
+  'GRT/USDT': 'BINANCE:GRTUSDT',    'FET/USDT': 'BINANCE:FETUSDT',
+  'RNDR/USDT':'BINANCE:RNDRUSDT',   'PYTH/USDT':'BINANCE:PYTHUSDT',
+  'STRK/USDT':'BINANCE:STRKUSDT',   'JTO/USDT': 'BINANCE:JTOUSDT',
+  // Stock perps
+  'AAPL/USD': 'NASDAQ:AAPL',        'AMZN/USD': 'NASDAQ:AMZN',
+  'TSLA/USD': 'NASDAQ:TSLA',        'MSFT/USD': 'NASDAQ:MSFT',
+  'GOOGL/USD':'NASDAQ:GOOGL',       'NVDA/USD': 'NASDAQ:NVDA',
+  // BTCUSDT perps
+  'BTCUSDT':  'BINANCE:BTCUSDT',    'ETHUSDT':  'BINANCE:ETHUSDT',
+  'BNBUSDT':  'BINANCE:BNBUSDT',    'SOLUSDT':  'BINANCE:SOLUSDT',
 };
 
-export function toTVSymbol(fromSymbol: string, toSymbol: string): string {
-  const key = `${fromSymbol.toUpperCase()}/${toSymbol.toUpperCase()}`;
-  return PAIR_TO_TV_SYMBOL[key] || `BINANCE:${fromSymbol.toUpperCase()}${toSymbol.toUpperCase()}`;
+export function toTVSymbol(from: string, to: string): string {
+  const key = `${from.toUpperCase()}/${to.toUpperCase()}`;
+  if (PAIR_TO_TV[key]) return PAIR_TO_TV[key];
+  // Try the combined symbol (for perps)
+  const combined = `${from.toUpperCase()}${to.toUpperCase()}`;
+  if (PAIR_TO_TV[combined]) return PAIR_TO_TV[combined];
+  return `BINANCE:${from.toUpperCase()}${to.toUpperCase()}`;
+}
+
+export function perpSymbolToTV(symbol: string): string {
+  // e.g. "BTCUSDT" → "BINANCE:BTCUSDT"
+  if (PAIR_TO_TV[symbol]) return PAIR_TO_TV[symbol];
+  if (symbol.endsWith('USDT')) return `BINANCE:${symbol}`;
+  if (symbol.endsWith('USD'))  return `NASDAQ:${symbol.replace('USD', '')}`;
+  return `BINANCE:${symbol}`;
 }
